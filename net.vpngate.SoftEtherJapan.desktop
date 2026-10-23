@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=SoftEther Japan
+Comment=Connect to Japanese VPN Gate relays with the native SoftEther client
+Exec=softether-jp
+Icon=network-vpn
+Terminal=false
+Type=Application
+Categories=Network;Utility;
+Keywords=VPN;Japan;SoftEther;VPN Gate;
