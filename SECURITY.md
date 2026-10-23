@@ -25,6 +25,10 @@ physical interface while the application expects SoftEther to provide privacy.
    remote relay data cannot replace it.
 9. PolicyKit permits only the packaged helper for an active local desktop
    session, so connection and cleanup do not create repeated password dialogs.
+10. Before invoking PolicyKit, the GUI verifies that both the helper and policy
+    exist, are root-owned, and are not writable by a group or other users. An
+    incomplete installation therefore fails without opening an authentication
+    dialog or incrementing the system's failed-login counter.
 
 ## Privileged surface
 
