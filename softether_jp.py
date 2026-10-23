@@ -22,6 +22,7 @@ API_URL = "https://www.vpngate.net/api/iphone/"
 ACCOUNT = "Japan-GUI"
 NIC = "japan"
 HELPER = "/usr/libexec/softether-jp-helper"
+POLICY = "/usr/share/polkit-1/actions/net.vpngate.SoftEtherJapan.policy"
 
 
 def run(*args: str, timeout: int = 30, check: bool = True) -> subprocess.CompletedProcess:
@@ -40,6 +41,18 @@ def failure_text(exc: Exception) -> str:
         if detail:
             return detail.splitlines()[-1]
     return str(exc)
+
+
+def privileged_components_ready() -> bool:
+    """Refuse incomplete installs before pkexec can request authentication."""
+    for path in (HELPER, POLICY):
+        try:
+            info = os.stat(path)
+        except OSError:
+            return False
+        if info.st_uid != 0 or info.st_mode & 0o022:
+            return False
+    return True
 
 
 class SoftEtherJapan(Gtk.Application):
@@ -212,8 +225,8 @@ class SoftEtherJapan(Gtk.Application):
         prepared = False
         try:
             port = self._open_port(relay.ip)
-            if not os.path.isfile(HELPER) or os.stat(HELPER).st_uid != 0:
-                raise RuntimeError("The root-owned networking helper is not installed")
+            if not privileged_components_ready():
+                raise RuntimeError("The secure networking helper or its authorization policy is not installed correctly")
             # Fail closed before starting the tunnel. Only the selected relay and
             # local-network traffic may leave through the physical interface.
             run("pkexec", HELPER, "prepare", relay.ip, timeout=60)
