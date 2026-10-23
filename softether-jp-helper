@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+PROFILE="SoftEther Japan"
+DEVICE="vpn_japan"
+STATE_DIR="/run/softether-jp"
+STATE_FILE="$STATE_DIR/network"
+
+valid_ipv4() {
+  printf '%s\n' "$1" | awk -F. 'NF==4 { for (i=1;i<=4;i++) if ($i !~ /^[0-9]+$/ || $i > 255) exit 1; ok=1 } END { exit !ok }'
+}
+
+remove_firewall() {
+  nft list table inet softether_jp >/dev/null 2>&1 && nft delete table inet softether_jp || true
+}
+
+case "${1:-}" in
+  prepare)
+    SERVER_IP="${2:?missing server IP}"
+    valid_ipv4 "$SERVER_IP" || { echo "Invalid relay IPv4 address" >&2; exit 2; }
+    DEFAULT_LINE="$(ip -4 route show default | grep -v "$DEVICE" | head -n 1)"
+    GATEWAY="$(printf '%s\n' "$DEFAULT_LINE" | awk '{for(i=1;i<=NF;i++) if($i=="via") print $(i+1)}')"
+    PHYSICAL="$(printf '%s\n' "$DEFAULT_LINE" | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}')"
+    [ -n "$GATEWAY" ] && [ -n "$PHYSICAL" ]
+    ip route replace "$SERVER_IP/32" via "$GATEWAY" dev "$PHYSICAL"
+    install -d -m 700 "$STATE_DIR"
+    printf '%s %s %s\n' "$SERVER_IP" "$GATEWAY" "$PHYSICAL" > "$STATE_FILE"
+    chmod 600 "$STATE_FILE"
+    remove_firewall
+    nft -f - <<EOF
+table inet softether_jp {
+  chain output {
+    type filter hook output priority -50; policy accept;
+    oifname "$PHYSICAL" ip daddr "$SERVER_IP" accept
+    oifname "$PHYSICAL" udp sport 68 udp dport 67 accept
+    oifname "$PHYSICAL" udp dport 53 drop
+    oifname "$PHYSICAL" tcp dport 53 drop
+    oifname "$PHYSICAL" ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 } accept
+    oifname "$PHYSICAL" ip6 daddr { fc00::/7, fe80::/10 } accept
+    oifname "$PHYSICAL" drop
+  }
+}
+EOF
+    ;;
+  up)
+    [ -r "$STATE_FILE" ] || { echo "Missing prepared network state" >&2; exit 2; }
+    nmcli device set "$DEVICE" managed yes
+    if nmcli -t -f NAME connection show | grep -Fxq "$PROFILE"; then
+      nmcli connection modify "$PROFILE" connection.interface-name "$DEVICE" ipv4.method auto ipv4.route-metric 50 ipv6.method disabled connection.autoconnect no
+    else
+      nmcli connection add type ethernet ifname "$DEVICE" con-name "$PROFILE" ipv4.method auto ipv4.route-metric 50 ipv6.method disabled connection.autoconnect no
+    fi
+    nmcli --wait 30 connection up "$PROFILE"
+    ;;
+  down)
+    nmcli --wait 15 connection down "$PROFILE" 2>/dev/null || true
+    remove_firewall
+    if [ -r "$STATE_FILE" ]; then
+      read -r SERVER_IP GATEWAY PHYSICAL < "$STATE_FILE"
+      valid_ipv4 "$SERVER_IP" && ip route del "$SERVER_IP/32" via "$GATEWAY" dev "$PHYSICAL" 2>/dev/null || true
+    fi
+    rm -rf "$STATE_DIR"
+    ;;
+  *)
+    echo "Usage: $0 {prepare SERVER_IP|up|down}" >&2
+    exit 2
+    ;;
+esac
