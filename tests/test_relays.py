@@ -4,8 +4,8 @@ import sys
 import unittest
 
 
-MODULE_PATH = pathlib.Path(__file__).parents[1] / "softether_jp.py"
-SPEC = importlib.util.spec_from_file_location("softether_jp", MODULE_PATH)
+MODULE_PATH = pathlib.Path(__file__).parents[1] / "relays.py"
+SPEC = importlib.util.spec_from_file_location("relays", MODULE_PATH)
 APP = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = APP
 SPEC.loader.exec_module(APP)
