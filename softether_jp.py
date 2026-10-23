@@ -33,6 +33,15 @@ def vpncmd(command: str, *args: str, check: bool = True) -> str:
     return proc.stdout + proc.stderr
 
 
+def failure_text(exc: Exception) -> str:
+    """Return useful command output instead of only an exit status."""
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or exc.stdout or "").strip()
+        if detail:
+            return detail.splitlines()[-1]
+    return str(exc)
+
+
 class SoftEtherJapan(Gtk.Application):
     def __init__(self) -> None:
         super().__init__(application_id="net.vpngate.SoftEtherJapan")
@@ -180,7 +189,7 @@ class SoftEtherJapan(Gtk.Application):
             return
         relay = self.rows[row]
         self.set_busy(True)
-        self.set_status(f"Connecting to {relay.ip}… You may be asked for your administrator password.")
+        self.set_status(f"Connecting to {relay.ip}…")
         threading.Thread(target=self._connect_worker, args=(relay,), daemon=True).start()
 
     @staticmethod
@@ -200,6 +209,7 @@ class SoftEtherJapan(Gtk.Application):
         raise RuntimeError("This relay is no longer accepting SoftEther connections")
 
     def _connect_worker(self, relay: Relay) -> None:
+        prepared = False
         try:
             port = self._open_port(relay.ip)
             if not os.path.isfile(HELPER) or os.stat(HELPER).st_uid != 0:
@@ -207,6 +217,7 @@ class SoftEtherJapan(Gtk.Application):
             # Fail closed before starting the tunnel. Only the selected relay and
             # local-network traffic may leave through the physical interface.
             run("pkexec", HELPER, "prepare", relay.ip, timeout=60)
+            prepared = True
             vpncmd("AccountDisconnect", ACCOUNT, check=False)
             vpncmd("AccountDelete", ACCOUNT, check=False)
             vpncmd("AccountCreate", ACCOUNT, f"/SERVER:{relay.ip}:{port}", "/HUB:VPNGATE", "/USERNAME:vpn", f"/NICNAME:{NIC}")
@@ -231,8 +242,9 @@ class SoftEtherJapan(Gtk.Application):
             GLib.idle_add(self._connected_ui, public_ip, city)
         except Exception as exc:
             vpncmd("AccountDisconnect", ACCOUNT, check=False)
-            run("pkexec", HELPER, "down", timeout=45, check=False)
-            GLib.idle_add(self.set_status, f"Connection failed: {exc}")
+            if prepared:
+                run("pkexec", HELPER, "down", timeout=45, check=False)
+            GLib.idle_add(self.set_status, f"Connection failed: {failure_text(exc)}")
         finally:
             GLib.idle_add(self.set_busy, False)
 
