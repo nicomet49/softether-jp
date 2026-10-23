@@ -1,6 +1,6 @@
 pkgname=softether-jp
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Native GTK client for Japanese VPN Gate relays using SoftEther"
 arch=('any')
 url="https://github.com/nicomet49/softether-jp"
