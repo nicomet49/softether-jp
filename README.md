@@ -14,6 +14,7 @@ Client.
 - Physical-interface DNS blocking while the VPN is expected to be active
 - Public-IP country verification after connection
 - A minimal root-owned helper; the GTK application itself is unprivileged
+- No repeated password dialogs; PolicyKit authorizes only the packaged helper
 
 ## Arch Linux installation
 
@@ -30,9 +31,10 @@ Launch **SoftEther Japan** from your application menu or run:
 softether-jp
 ```
 
-The administrator dialog authorizes only the networking helper used to install
-the temporary firewall and NetworkManager route. Disconnect other VPN clients
-before connecting.
+The active local desktop session may run only the packaged networking helper,
+without a password dialog. The policy does not grant passwordless access to a
+shell or to general networking commands. Disconnect other VPN clients before
+connecting.
 
 ## Leak model
 
