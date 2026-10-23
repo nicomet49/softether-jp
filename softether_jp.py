@@ -3,19 +3,16 @@
 
 from __future__ import annotations
 
-import csv
 import concurrent.futures
-import io
-import json
 import os
 import socket
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
-
 import gi
 import requests
+
+from relays import Relay, parse_relays
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk  # noqa: E402
@@ -25,53 +22,6 @@ API_URL = "https://www.vpngate.net/api/iphone/"
 ACCOUNT = "Japan-GUI"
 NIC = "japan"
 HELPER = "/usr/libexec/softether-jp-helper"
-
-
-@dataclass
-class Relay:
-    host: str
-    ip: str
-    ping: int
-    speed: int
-    sessions: int
-    uptime: int
-    score: int
-
-    @property
-    def speed_text(self) -> str:
-        return f"{self.speed / 1_000_000:.0f} Mbps"
-
-    @property
-    def ping_text(self) -> str:
-        return "—" if self.ping < 0 else f"{self.ping} ms"
-
-
-def number(value: str, fallback: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return fallback
-
-
-def parse_relays(payload: str) -> list[Relay]:
-    """Parse and rank Japanese relays from the official VPN Gate CSV response."""
-    lines = [line for line in payload.splitlines() if not line.startswith("*")]
-    parsed: list[Relay] = []
-    for item in csv.DictReader(io.StringIO("\n".join(lines))):
-        if item.get("CountryShort") != "JP":
-            continue
-        host, ip = item.get("#HostName", ""), item.get("IP", "")
-        try:
-            socket.inet_pton(socket.AF_INET, ip)
-        except OSError:
-            continue
-        parsed.append(Relay(
-            host=host, ip=ip, ping=number(item.get("Ping", ""), -1),
-            speed=number(item.get("Speed", "")), sessions=number(item.get("NumVpnSessions", "")),
-            uptime=number(item.get("Uptime", "")), score=number(item.get("Score", "")),
-        ))
-    parsed.sort(key=lambda r: (-r.score, r.ping if r.ping >= 0 else 999999))
-    return parsed
 
 
 def run(*args: str, timeout: int = 30, check: bool = True) -> subprocess.CompletedProcess:
