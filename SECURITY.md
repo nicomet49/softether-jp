@@ -23,6 +23,8 @@ physical interface while the application expects SoftEther to provide privacy.
    place, after which the helper restores normal networking.
 8. The privileged helper is installed root-owned in `/usr/libexec`; the GUI and
    remote relay data cannot replace it.
+9. PolicyKit permits only the packaged helper for an active local desktop
+   session, so connection and cleanup do not create repeated password dialogs.
 
 ## Privileged surface
 
@@ -30,6 +32,12 @@ physical interface while the application expects SoftEther to provide privacy.
 the IPv4 argument, derives the physical gateway/interface from the kernel route
 table, and uses fixed `nft`, `ip`, and `nmcli` operations. It does not evaluate
 remote text or invoke a shell constructed by the GUI.
+
+The PolicyKit grant is deliberately narrower than passwordless access to
+`nft`, `ip`, `nmcli`, a shell, or arbitrary commands. Inactive and remote
+sessions are denied. An interactive user can already originate or stop their
+own network traffic, so letting that user operate this application's validated
+kill-switch helper does not add access to another user's data.
 
 ## Limitations
 
